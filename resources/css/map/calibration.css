@@ -174,8 +174,63 @@ body.calibration-body-root {
     min-height: 0;
 }
 
-.calibration-map-container #gpsWarning {
-    display: none;
+.calibration-map-container .locate-me-btn {
+    min-width: 92px;
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 0;
+    border-bottom: 1px solid #ccc;
+    background: #fff;
+    color: #222;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.calibration-map-container .locate-me-btn:hover {
+    background: #f4f4f4;
+}
+
+.calibration-map-container .locate-me-btn:disabled {
+    cursor: wait;
+    opacity: 0.75;
+}
+
+.calibration-map-container .gps-warning {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 1000;
+    max-width: 640px;
+    padding: 10px 12px;
+    border: 1px solid #ffec99;
+    border-radius: 6px;
+    background: #fff3cd;
+    color: #664d03;
+    font-size: 14px;
+    line-height: 1.4;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+.calibration-map-container .gps-debug {
+    position: absolute;
+    left: 12px;
+    bottom: 72px;
+    z-index: 1000;
+    max-width: min(420px, calc(100% - 24px));
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
 }
 
 #houseGraveSVG {
@@ -342,6 +397,19 @@ body.calibration-body-root {
 
     .calibration-main {
         height: 65dvh;
+    }
+
+    .calibration-map-container .gps-warning {
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        font-size: 13px;
+    }
+
+    .calibration-map-container .gps-debug {
+        left: 8px;
+        bottom: 92px;
+        max-width: calc(100% - 16px);
     }
 
     .calibration-toolbar {

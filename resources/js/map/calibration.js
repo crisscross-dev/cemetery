@@ -102,8 +102,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const cemeteryMap = createCemeteryLeafletMap({
         autoStartGps: false,
-        showLocateControl: false,
-        showMissingCalibrationWarning: false,
+        showLocateControl: true,
+        showMissingCalibrationWarning: true,
         containerSelector: "#calibrationMapContainer",
         onMapClick: ({ svgX, svgY }) => {
             lastClickedPoint = {

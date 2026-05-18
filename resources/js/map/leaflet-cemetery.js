@@ -1,6 +1,11 @@
 const SVG_WIDTH = 1498;
 const SVG_HEIGHT = 1190;
 const DEFAULT_GPS_ACCURACY_WARNING_METERS = 20;
+const GPS_POSITION_OPTIONS = {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0,
+};
 
 function showGpsWarning(message) {
     const warning = document.getElementById("gpsWarning");
@@ -16,6 +21,43 @@ function hideGpsWarning() {
 
     warning.hidden = true;
     warning.textContent = "";
+}
+
+function showGpsDebug(message) {
+    const debug = document.getElementById("gpsDebug");
+    if (!debug) return;
+
+    debug.textContent = message;
+    debug.hidden = false;
+}
+
+function formatGpsPosition(position) {
+    return [
+        `Latitude: ${position.coords.latitude}`,
+        `Longitude: ${position.coords.longitude}`,
+        `Accuracy: ${Math.round(position.coords.accuracy)} meters`,
+        `Timestamp: ${new Date(position.timestamp).toLocaleString()}`,
+    ].join("\n");
+}
+
+function gpsErrorMessage(error) {
+    if (error.code === error.PERMISSION_DENIED) {
+        return "Location permission was denied.";
+    }
+
+    if (error.code === error.POSITION_UNAVAILABLE) {
+        return "GPS position is unavailable. Please try again outside or check device location settings.";
+    }
+
+    if (error.code === error.TIMEOUT) {
+        return "GPS request timed out. Please try again with a clearer sky view.";
+    }
+
+    return "Unable to read GPS location.";
+}
+
+function isLocalhost() {
+    return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 }
 
 function haversineMeters(a, b) {
@@ -92,8 +134,14 @@ function prepareLeafletContainer(containerSelector) {
     warning.className = "gps-warning";
     warning.hidden = true;
 
+    const debug = document.createElement("pre");
+    debug.id = "gpsDebug";
+    debug.className = "gps-debug";
+    debug.hidden = true;
+
     mapContainer.appendChild(leafletElement);
     mapContainer.appendChild(warning);
+    mapContainer.appendChild(debug);
 
     return { leafletElement, svgElement };
 }
@@ -140,6 +188,7 @@ export function createCemeteryLeafletMap({
     let calibration = null;
     let svgUnitsPerMeter = 1;
     let accuracyWarningMeters = DEFAULT_GPS_ACCURACY_WARNING_METERS;
+    let locateButton = null;
 
     async function loadGraves() {
         const timestamp = Date.now();
@@ -182,12 +231,108 @@ export function createCemeteryLeafletMap({
         accuracyWarningMeters =
             data.accuracy_warning_meters || DEFAULT_GPS_ACCURACY_WARNING_METERS;
         svgUnitsPerMeter = estimateSvgUnitsPerMeter(calibration);
+        console.log("Cemetery GPS calibration status:", {
+            configured: hasCalibration(calibration),
+            calibration,
+        });
 
         if (!hasCalibration(calibration) && showMissingCalibrationWarning) {
             showGpsWarning("GPS is active, but cemetery map calibration points are missing.");
         }
 
         return calibration;
+    }
+
+    function moveUserMarkerFromPosition(position, { centerOnUser = false } = {}) {
+        const accuracy = position.coords.accuracy;
+
+        if (!hasCalibration(calibration)) {
+            console.log("GPS conversion skipped because calibration is missing.", {
+                calibration,
+            });
+            return false;
+        }
+
+        const point = gpsToSvgPoint(
+            position.coords.latitude,
+            position.coords.longitude,
+            calibration
+        );
+
+        if (!point) {
+            console.log("GPS conversion failed.", { position, calibration });
+            showGpsWarning("GPS is working, but calibration values could not convert this position.");
+            return false;
+        }
+
+        const latLng = L.latLng(point.y, point.x);
+        const radius = Math.max(8, accuracy * svgUnitsPerMeter);
+
+        if (!userMarker) {
+            userMarker = L.circleMarker(latLng, {
+                radius: 8,
+                color: "#ffffff",
+                weight: 2,
+                fillColor: "#2563eb",
+                fillOpacity: 1,
+            }).addTo(map);
+
+            accuracyCircle = L.circle(latLng, {
+                radius,
+                color: "#2563eb",
+                weight: 1,
+                fillColor: "#3b82f6",
+                fillOpacity: 0.15,
+            }).addTo(map);
+        } else {
+            userMarker.setLatLng(latLng);
+            accuracyCircle.setLatLng(latLng);
+            accuracyCircle.setRadius(radius);
+        }
+
+        if (centerOnUser) {
+            map.setView(latLng, Math.max(map.getZoom(), 1));
+        }
+
+        return true;
+    }
+
+    function handleGpsSuccess(position, { centerOnUser = false, source = "watchPosition" } = {}) {
+        lastPosition = position;
+        console.log("GPS success payload:", {
+            source,
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: position.timestamp,
+        });
+
+        const rawGpsMessage = formatGpsPosition(position);
+        const calibrated = moveUserMarkerFromPosition(position, { centerOnUser });
+
+        if (!calibrated) {
+            showGpsWarning("GPS is working, but map calibration is missing. User marker cannot be placed on SVG yet.");
+            showGpsDebug(`${rawGpsMessage}\n\nGPS is working, but map calibration is missing. User marker cannot be placed on SVG yet.`);
+            return;
+        }
+
+        if (position.coords.accuracy > accuracyWarningMeters) {
+            showGpsWarning(`GPS accuracy is low: about ${Math.round(position.coords.accuracy)} meters. Use it as a nearby guide, not exact grave-level positioning.`);
+        } else {
+            hideGpsWarning();
+        }
+
+        showGpsDebug(rawGpsMessage);
+    }
+
+    function handleGpsError(error, { source = "watchPosition" } = {}) {
+        console.log("GPS error payload:", {
+            source,
+            code: error.code,
+            message: error.message,
+            error,
+        });
+        showGpsWarning(gpsErrorMessage(error));
     }
 
     function updateGraveBoxes() {
@@ -219,12 +364,17 @@ export function createCemeteryLeafletMap({
 
     function startGpsTracking({ centerOnUser = false } = {}) {
         if (!navigator.geolocation) {
+            console.log("GPS unavailable: browser does not support geolocation.");
             showGpsWarning("GPS is not supported by this browser.");
             return;
         }
 
-        if (!window.isSecureContext) {
-            showGpsWarning("GPS works reliably only on HTTPS or localhost.");
+        if (!window.isSecureContext && !isLocalhost()) {
+            console.log("GPS insecure context warning.", {
+                protocol: window.location.protocol,
+                hostname: window.location.hostname,
+            });
+            showGpsWarning("GPS requires HTTPS or localhost in most browsers.");
         }
 
         if (!hasCalibration(calibration) && showMissingCalibrationWarning) {
@@ -238,64 +388,65 @@ export function createCemeteryLeafletMap({
 
         watchId = navigator.geolocation.watchPosition(
             (position) => {
-                lastPosition = position;
-                const accuracy = position.coords.accuracy;
-                const point = gpsToSvgPoint(
-                    position.coords.latitude,
-                    position.coords.longitude,
-                    calibration
-                );
+                handleGpsSuccess(position, { centerOnUser, source: "watchPosition" });
+            },
+            (error) => {
+                handleGpsError(error, { source: "watchPosition" });
+            },
+            GPS_POSITION_OPTIONS
+        );
+    }
 
-                if (!point) return;
+    function requestCurrentGpsPosition(button) {
+        console.log("Locate button clicked");
 
-                const latLng = L.latLng(point.y, point.x);
-                const radius = Math.max(8, accuracy * svgUnitsPerMeter);
+        if (!navigator.geolocation) {
+            console.log("GPS request blocked: browser does not support geolocation.");
+            showGpsWarning("GPS is not supported by this browser.");
+            return;
+        }
 
-                if (!userMarker) {
-                    userMarker = L.circleMarker(latLng, {
-                        radius: 8,
-                        color: "#ffffff",
-                        weight: 2,
-                        fillColor: "#2563eb",
-                        fillOpacity: 1,
-                    }).addTo(map);
+        if (!window.isSecureContext && !isLocalhost()) {
+            console.log("GPS request blocked or likely to fail: page is not HTTPS or localhost.", {
+                protocol: window.location.protocol,
+                hostname: window.location.hostname,
+            });
+            showGpsWarning("GPS requires HTTPS or localhost in most browsers.");
+        }
 
-                    accuracyCircle = L.circle(latLng, {
-                        radius,
-                        color: "#2563eb",
-                        weight: 1,
-                        fillColor: "#3b82f6",
-                        fillOpacity: 0.15,
-                    }).addTo(map);
-                } else {
-                    userMarker.setLatLng(latLng);
-                    accuracyCircle.setLatLng(latLng);
-                    accuracyCircle.setRadius(radius);
-                }
+        console.log("GPS request started", GPS_POSITION_OPTIONS);
+        console.log("Cemetery GPS calibration status:", {
+            configured: hasCalibration(calibration),
+            calibration,
+        });
 
-                if (centerOnUser) {
-                    map.setView(latLng, Math.max(map.getZoom(), 1));
-                }
+        showGpsWarning("Requesting GPS location...");
+        showGpsDebug("Requesting GPS location...");
 
-                if (accuracy > accuracyWarningMeters) {
-                    showGpsWarning(`GPS accuracy is low: about ${Math.round(accuracy)} meters. Use it as a nearby guide, not exact grave-level positioning.`);
-                } else {
-                    hideGpsWarning();
+        if (button) {
+            button.disabled = true;
+            button.textContent = "Locating...";
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                handleGpsSuccess(position, {
+                    centerOnUser: true,
+                    source: "getCurrentPosition",
+                });
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = "Locate Me";
                 }
             },
             (error) => {
-                if (error.code === error.PERMISSION_DENIED) {
-                    showGpsWarning("Location permission was denied.");
-                    return;
+                handleGpsError(error, { source: "getCurrentPosition" });
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = "Locate Me";
                 }
-
-                showGpsWarning("Unable to read GPS location. Please try again outside or check browser location settings.");
             },
-            {
-                enableHighAccuracy: true,
-                maximumAge: 5000,
-                timeout: 15000,
-            }
+            GPS_POSITION_OPTIONS
         );
     }
 
@@ -304,13 +455,14 @@ export function createCemeteryLeafletMap({
 
         locateControl.onAdd = function () {
             const button = L.DomUtil.create("button", "leaflet-control locate-me-btn");
+            locateButton = button;
             button.type = "button";
             button.textContent = "Locate Me";
             button.title = "Show current GPS location";
 
             L.DomEvent.disableClickPropagation(button);
             L.DomEvent.on(button, "click", () => {
-                startGpsTracking({ centerOnUser: true });
+                requestCurrentGpsPosition(button);
             });
 
             return button;
