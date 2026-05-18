@@ -122,6 +122,7 @@ body.calibration-body-root {
 .calibration-actions button,
 .calibration-save-btn,
 .calibration-reset-btn,
+#useLastGpsForPreview,
 #previewGpsPoint {
     width: 100%;
     border: 0;
@@ -138,6 +139,7 @@ body.calibration-body-root {
 .calibration-actions button:hover,
 .calibration-save-btn:hover,
 .calibration-reset-btn:hover,
+#useLastGpsForPreview:hover,
 #previewGpsPoint:hover {
     background: #1e4620;
 }
@@ -274,6 +276,29 @@ body.calibration-body-root {
     box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
 }
 
+.calibration-guide,
+.calibration-completeness {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid #c7d7c7;
+    border-radius: 6px;
+    background: #f6fbf6;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.calibration-guide p,
+.calibration-completeness span {
+    margin: 0;
+}
+
+.calibration-completeness span {
+    color: #1e4620;
+    font-weight: 700;
+}
+
 .calibration-section {
     display: grid;
     gap: 10px;
@@ -286,6 +311,18 @@ body.calibration-body-root {
     color: #1e4620;
     font-size: 1rem;
     font-weight: 600;
+}
+
+.anchor-card {
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid #e0e8e0;
+    border-radius: 6px;
+}
+
+.anchor-card.is-complete {
+    border-color: #65a30d;
+    background: #f7fee7;
 }
 
 .calibration-section label {
@@ -335,6 +372,16 @@ body.calibration-body-root {
     color: #334233;
     font-size: 14px;
     line-height: 1.5;
+}
+
+.anchor-tooltip {
+    border: 0;
+    border-radius: 4px;
+    background: #7c3aed;
+    color: #fff;
+    box-shadow: none;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 @media (max-width: 1100px) {

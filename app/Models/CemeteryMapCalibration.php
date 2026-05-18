@@ -15,6 +15,7 @@ class CemeteryMapCalibration extends Model
         'bottom_right_lng',
         'bottom_right_svg_x',
         'bottom_right_svg_y',
+        'anchors',
     ];
 
     protected $casts = [
@@ -26,5 +27,6 @@ class CemeteryMapCalibration extends Model
         'bottom_right_lng' => 'float',
         'bottom_right_svg_x' => 'float',
         'bottom_right_svg_y' => 'float',
+        'anchors' => 'array',
     ];
 }

@@ -78,8 +78,33 @@ class GraveController extends Controller
             : null;
 
         if ($savedCalibration) {
+            $anchors = $savedCalibration->anchors ?: [
+                'a' => [
+                    'lat' => $savedCalibration->top_left_lat,
+                    'lng' => $savedCalibration->top_left_lng,
+                    'x' => $savedCalibration->top_left_svg_x,
+                    'y' => $savedCalibration->top_left_svg_y,
+                ],
+                'b' => ['lat' => null, 'lng' => null, 'x' => null, 'y' => null],
+                'c' => ['lat' => null, 'lng' => null, 'x' => null, 'y' => null],
+                'd' => [
+                    'lat' => $savedCalibration->bottom_right_lat,
+                    'lng' => $savedCalibration->bottom_right_lng,
+                    'x' => $savedCalibration->bottom_right_svg_x,
+                    'y' => $savedCalibration->bottom_right_svg_y,
+                ],
+            ];
+            $anchorCount = collect($anchors)->filter(function ($anchor) {
+                return $anchor['lat'] !== null
+                    && $anchor['lng'] !== null
+                    && $anchor['x'] !== null
+                    && $anchor['y'] !== null;
+            })->count();
+
             return response()->json([
-                'configured' => true,
+                'configured' => $anchorCount === 4,
+                'anchor_count' => $anchorCount,
+                'anchors' => $anchors,
                 'top_left' => [
                     'lat' => $savedCalibration->top_left_lat,
                     'lng' => $savedCalibration->top_left_lng,
@@ -93,6 +118,7 @@ class GraveController extends Controller
                     'y' => $savedCalibration->bottom_right_svg_y,
                 ],
                 'accuracy_warning_meters' => 20,
+                'transform' => 'homography_4_anchor',
             ])->header('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
 
@@ -104,9 +130,12 @@ class GraveController extends Controller
 
         return response()->json([
             'configured' => $hasCalibration,
+            'anchor_count' => $hasCalibration ? 2 : 0,
+            'anchors' => null,
             'top_left' => $this->formatCalibrationPoint($topLeft),
             'bottom_right' => $this->formatCalibrationPoint($bottomRight),
             'accuracy_warning_meters' => 20,
+            'transform' => 'legacy_2_point',
         ])->header('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
 

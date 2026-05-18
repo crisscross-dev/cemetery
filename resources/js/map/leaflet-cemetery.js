@@ -79,12 +79,129 @@ function haversineMeters(a, b) {
 }
 
 function hasCalibration(calibration) {
-    return Boolean(calibration && calibration.configured && calibration.topLeft && calibration.bottomRight);
+    return Boolean(
+        calibration &&
+            (
+                hasFourAnchorCalibration(calibration) ||
+                (calibration.configured && calibration.topLeft && calibration.bottomRight)
+            )
+    );
+}
+
+function hasFourAnchorCalibration(calibration) {
+    return Boolean(
+        calibration &&
+            calibration.anchors &&
+            ["a", "b", "c", "d"].every((key) => {
+                const anchor = calibration.anchors[key];
+                return anchor &&
+                    anchor.lat !== null &&
+                    anchor.lng !== null &&
+                    anchor.x !== null &&
+                    anchor.y !== null;
+            })
+    );
+}
+
+function solveLinearSystem(matrix, vector) {
+    const size = vector.length;
+    const augmented = matrix.map((row, index) => [...row, vector[index]]);
+
+    for (let column = 0; column < size; column += 1) {
+        let pivotRow = column;
+
+        for (let row = column + 1; row < size; row += 1) {
+            if (Math.abs(augmented[row][column]) > Math.abs(augmented[pivotRow][column])) {
+                pivotRow = row;
+            }
+        }
+
+        if (Math.abs(augmented[pivotRow][column]) < 1e-12) {
+            return null;
+        }
+
+        [augmented[column], augmented[pivotRow]] = [augmented[pivotRow], augmented[column]];
+
+        const pivot = augmented[column][column];
+        for (let col = column; col <= size; col += 1) {
+            augmented[column][col] /= pivot;
+        }
+
+        for (let row = 0; row < size; row += 1) {
+            if (row === column) continue;
+            const factor = augmented[row][column];
+
+            for (let col = column; col <= size; col += 1) {
+                augmented[row][col] -= factor * augmented[column][col];
+            }
+        }
+    }
+
+    return augmented.map((row) => row[size]);
+}
+
+function computeHomography(anchors) {
+    const points = ["a", "b", "c", "d"].map((key) => anchors[key]);
+    const matrix = [];
+    const vector = [];
+
+    points.forEach((point) => {
+        const sourceX = point.lng;
+        const sourceY = point.lat;
+        const targetX = point.x;
+        const targetY = point.y;
+
+        matrix.push([sourceX, sourceY, 1, 0, 0, 0, -targetX * sourceX, -targetX * sourceY]);
+        vector.push(targetX);
+
+        matrix.push([0, 0, 0, sourceX, sourceY, 1, -targetY * sourceX, -targetY * sourceY]);
+        vector.push(targetY);
+    });
+
+    const solution = solveLinearSystem(matrix, vector);
+    if (!solution) return null;
+
+    return [
+        [solution[0], solution[1], solution[2]],
+        [solution[3], solution[4], solution[5]],
+        [solution[6], solution[7], 1],
+    ];
+}
+
+function applyHomography(latitude, longitude, homography) {
+    const sourceX = longitude;
+    const sourceY = latitude;
+    const denominator =
+        homography[2][0] * sourceX +
+        homography[2][1] * sourceY +
+        homography[2][2];
+
+    if (Math.abs(denominator) < 1e-12) return null;
+
+    return {
+        x:
+            (homography[0][0] * sourceX +
+                homography[0][1] * sourceY +
+                homography[0][2]) /
+            denominator,
+        y:
+            (homography[1][0] * sourceX +
+                homography[1][1] * sourceY +
+                homography[1][2]) /
+            denominator,
+    };
 }
 
 function gpsToSvgPoint(latitude, longitude, calibration) {
     if (!hasCalibration(calibration)) {
         return null;
+    }
+
+    if (hasFourAnchorCalibration(calibration)) {
+        const homography = calibration.homography || computeHomography(calibration.anchors);
+        if (!homography) return null;
+
+        return applyHomography(latitude, longitude, homography);
     }
 
     const topLeft = calibration.topLeft;
@@ -225,9 +342,14 @@ export function createCemeteryLeafletMap({
         const data = await response.json();
         calibration = {
             configured: data.configured === true,
+            anchorCount: data.anchor_count || 0,
+            anchors: data.anchors || null,
             topLeft: data.top_left,
             bottomRight: data.bottom_right,
         };
+        calibration.homography = hasFourAnchorCalibration(calibration)
+            ? computeHomography(calibration.anchors)
+            : null;
         accuracyWarningMeters =
             data.accuracy_warning_meters || DEFAULT_GPS_ACCURACY_WARNING_METERS;
         svgUnitsPerMeter = estimateSvgUnitsPerMeter(calibration);
@@ -299,6 +421,9 @@ export function createCemeteryLeafletMap({
 
     function handleGpsSuccess(position, { centerOnUser = false, source = "watchPosition" } = {}) {
         lastPosition = position;
+        if (typeof cemeteryApi?.onGpsSuccess === "function") {
+            cemeteryApi.onGpsSuccess(position, { source });
+        }
         console.log("GPS success payload:", {
             source,
             latitude: position.coords.latitude,
@@ -563,7 +688,7 @@ export function createCemeteryLeafletMap({
             if (autoStartGps) startGpsTracking();
         });
 
-    return {
+    const cemeteryApi = {
         map,
         svgElement,
         loadCalibration,
@@ -573,4 +698,6 @@ export function createCemeteryLeafletMap({
         highlightGrave,
         showTestMarker,
     };
+
+    return cemeteryApi;
 }

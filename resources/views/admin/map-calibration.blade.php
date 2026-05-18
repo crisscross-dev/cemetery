@@ -33,13 +33,16 @@
             <main class="calibration-main">
                 <div class="calibration-toolbar">
                     <div class="calibration-point-readout">
-                        <strong>Clicked SVG Point</strong>
+                        <strong>Selected Points</strong>
                         <span>SVG X: <output id="clickedSvgX">-</output></span>
                         <span>SVG Y: <output id="clickedSvgY">-</output></span>
+                        <span>GPS: <output id="capturedGpsSummary">not captured</output></span>
                     </div>
                     <div class="calibration-actions">
-                        <button type="button" id="useTopLeftPoint">Use as Top-left SVG Point</button>
-                        <button type="button" id="useBottomRightPoint">Use as Bottom-right SVG Point</button>
+                        <button type="button" class="anchor-assign-btn" data-anchor="a">Assign to Anchor A</button>
+                        <button type="button" class="anchor-assign-btn" data-anchor="b">Assign to Anchor B</button>
+                        <button type="button" class="anchor-assign-btn" data-anchor="c">Assign to Anchor C</button>
+                        <button type="button" class="anchor-assign-btn" data-anchor="d">Assign to Anchor D</button>
                     </div>
                 </div>
 
@@ -67,51 +70,48 @@
             </main>
 
             <aside class="calibration-panel">
+                <div class="calibration-guide">
+                    <strong>Guide</strong>
+                    <p>Use four visible physical landmarks: gate corners, fence corners, path intersections, or opposite cemetery edges. Avoid random graves because grave-level GPS is too noisy.</p>
+                </div>
+
+                <div class="calibration-completeness">
+                    <strong>Calibration Completeness</strong>
+                    <span id="anchorCompleteness">0/4 anchors configured</span>
+                </div>
+
                 <div id="calibrationWarning" class="calibration-warning" hidden></div>
                 <div id="calibrationSuccess" class="calibration-success" hidden></div>
 
                 <form id="calibrationForm">
                     @csrf
-                    <section class="calibration-section">
-                        <h2>Top-left Anchor Point</h2>
+                    @foreach (['a' => 'Anchor A', 'b' => 'Anchor B', 'c' => 'Anchor C', 'd' => 'Anchor D'] as $key => $label)
+                    <section class="calibration-section anchor-card" data-anchor-card="{{ $key }}">
+                        <h2>{{ $label }}</h2>
                         <label>Real Latitude
-                            <input type="number" step="0.00000001" name="top_left_lat" id="topLeftLat" value="{{ old('top_left_lat', optional($calibration)->top_left_lat) }}" required>
+                            <input type="number" step="0.00000001" name="anchors[{{ $key }}][lat]" id="anchor{{ strtoupper($key) }}Lat" value="{{ old("anchors.$key.lat", $anchors[$key]['lat']) }}" required>
                         </label>
                         <label>Real Longitude
-                            <input type="number" step="0.00000001" name="top_left_lng" id="topLeftLng" value="{{ old('top_left_lng', optional($calibration)->top_left_lng) }}" required>
+                            <input type="number" step="0.00000001" name="anchors[{{ $key }}][lng]" id="anchor{{ strtoupper($key) }}Lng" value="{{ old("anchors.$key.lng", $anchors[$key]['lng']) }}" required>
                         </label>
                         <label>SVG X
-                            <input type="number" step="0.01" name="top_left_svg_x" id="topLeftSvgX" value="{{ old('top_left_svg_x', optional($calibration)->top_left_svg_x) }}" required>
+                            <input type="number" step="0.01" name="anchors[{{ $key }}][x]" id="anchor{{ strtoupper($key) }}SvgX" value="{{ old("anchors.$key.x", $anchors[$key]['x']) }}" required>
                         </label>
                         <label>SVG Y
-                            <input type="number" step="0.01" name="top_left_svg_y" id="topLeftSvgY" value="{{ old('top_left_svg_y', optional($calibration)->top_left_svg_y) }}" required>
+                            <input type="number" step="0.01" name="anchors[{{ $key }}][y]" id="anchor{{ strtoupper($key) }}SvgY" value="{{ old("anchors.$key.y", $anchors[$key]['y']) }}" required>
                         </label>
                     </section>
-
-                    <section class="calibration-section">
-                        <h2>Bottom-right Anchor Point</h2>
-                        <label>Real Latitude
-                            <input type="number" step="0.00000001" name="bottom_right_lat" id="bottomRightLat" value="{{ old('bottom_right_lat', optional($calibration)->bottom_right_lat) }}" required>
-                        </label>
-                        <label>Real Longitude
-                            <input type="number" step="0.00000001" name="bottom_right_lng" id="bottomRightLng" value="{{ old('bottom_right_lng', optional($calibration)->bottom_right_lng) }}" required>
-                        </label>
-                        <label>SVG X
-                            <input type="number" step="0.01" name="bottom_right_svg_x" id="bottomRightSvgX" value="{{ old('bottom_right_svg_x', optional($calibration)->bottom_right_svg_x) }}" required>
-                        </label>
-                        <label>SVG Y
-                            <input type="number" step="0.01" name="bottom_right_svg_y" id="bottomRightSvgY" value="{{ old('bottom_right_svg_y', optional($calibration)->bottom_right_svg_y) }}" required>
-                        </label>
-                    </section>
+                    @endforeach
 
                     <div class="calibration-form-actions">
-                        <button type="submit" class="calibration-save-btn">Save Calibration</button>
+                        <button type="submit" class="calibration-save-btn">Save 4-Anchor Calibration</button>
                         <button type="button" class="calibration-reset-btn" id="resetCalibration">Reset Calibration</button>
                     </div>
                 </form>
 
                 <section class="calibration-section">
                     <h2>Preview GPS Point</h2>
+                    <button type="button" id="useLastGpsForPreview">Use Last Located GPS</button>
                     <label>Test Latitude
                         <input type="number" step="0.00000001" id="testLat">
                     </label>
@@ -121,7 +121,8 @@
                     <button type="button" id="previewGpsPoint">Show Test Marker</button>
                     <p class="calibration-preview-output">
                         SVG X: <output id="previewSvgX">-</output><br>
-                        SVG Y: <output id="previewSvgY">-</output>
+                        SVG Y: <output id="previewSvgY">-</output><br>
+                        GPS Accuracy: <output id="previewGpsAccuracy">-</output>
                     </p>
                 </section>
             </aside>

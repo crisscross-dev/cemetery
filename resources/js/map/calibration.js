@@ -1,14 +1,31 @@
 import { createCemeteryLeafletMap } from "./leaflet-cemetery";
 
+const ANCHORS = ["a", "b", "c", "d"];
 const roundCoordinate = (value) => Math.round(Number(value) * 100) / 100;
+const anchorLabel = (key) => key.toUpperCase();
 
-function getNumber(id) {
+function inputId(anchor, field) {
+    const suffix = {
+        lat: "Lat",
+        lng: "Lng",
+        x: "SvgX",
+        y: "SvgY",
+    }[field];
+
+    return `anchor${anchorLabel(anchor)}${suffix}`;
+}
+
+function getNumberById(id) {
     const value = document.getElementById(id).value;
     return value === "" ? null : Number(value);
 }
 
-function setValue(id, value) {
-    document.getElementById(id).value = roundCoordinate(value).toFixed(2);
+function getAnchorNumber(anchor, field) {
+    return getNumberById(inputId(anchor, field));
+}
+
+function setAnchorValue(anchor, field, value, precision = 2) {
+    document.getElementById(inputId(anchor, field)).value = Number(value).toFixed(precision);
 }
 
 function showMessage(id, message) {
@@ -23,82 +40,157 @@ function hideMessage(id) {
     element.hidden = true;
 }
 
-function readFormCalibration() {
-    const calibration = {
-        topLeft: {
-            lat: getNumber("topLeftLat"),
-            lng: getNumber("topLeftLng"),
-            x: getNumber("topLeftSvgX"),
-            y: getNumber("topLeftSvgY"),
-        },
-        bottomRight: {
-            lat: getNumber("bottomRightLat"),
-            lng: getNumber("bottomRightLng"),
-            x: getNumber("bottomRightSvgX"),
-            y: getNumber("bottomRightSvgY"),
-        },
-    };
+function readAnchors() {
+    const anchors = {};
 
-    const values = [
-        calibration.topLeft.lat,
-        calibration.topLeft.lng,
-        calibration.topLeft.x,
-        calibration.topLeft.y,
-        calibration.bottomRight.lat,
-        calibration.bottomRight.lng,
-        calibration.bottomRight.x,
-        calibration.bottomRight.y,
-    ];
+    ANCHORS.forEach((anchor) => {
+        anchors[anchor] = {
+            lat: getAnchorNumber(anchor, "lat"),
+            lng: getAnchorNumber(anchor, "lng"),
+            x: getAnchorNumber(anchor, "x"),
+            y: getAnchorNumber(anchor, "y"),
+        };
+    });
 
-    return {
-        configured: values.every((value) => value !== null && !Number.isNaN(value)),
-        ...calibration,
-    };
+    return anchors;
+}
+
+function anchorIsComplete(anchor) {
+    return ["lat", "lng", "x", "y"].every((field) => {
+        const value = anchor[field];
+        return value !== null && !Number.isNaN(value);
+    });
+}
+
+function configuredAnchorCount(anchors) {
+    return Object.values(anchors).filter(anchorIsComplete).length;
+}
+
+function updateCompleteness() {
+    const anchors = readAnchors();
+    const count = configuredAnchorCount(anchors);
+    document.getElementById("anchorCompleteness").textContent = `${count}/4 anchors configured`;
+
+    ANCHORS.forEach((anchor) => {
+        const card = document.querySelector(`[data-anchor-card="${anchor}"]`);
+        if (card) card.classList.toggle("is-complete", anchorIsComplete(anchors[anchor]));
+    });
+
+    return { anchors, count };
 }
 
 function clearCalibrationForm() {
-    [
-        "topLeftLat",
-        "topLeftLng",
-        "topLeftSvgX",
-        "topLeftSvgY",
-        "bottomRightLat",
-        "bottomRightLng",
-        "bottomRightSvgX",
-        "bottomRightSvgY",
-        "testLat",
-        "testLng",
-    ].forEach((id) => {
-        const element = document.getElementById(id);
-        if (element) element.value = "";
+    ANCHORS.forEach((anchor) => {
+        ["lat", "lng", "x", "y"].forEach((field) => {
+            document.getElementById(inputId(anchor, field)).value = "";
+        });
+    });
+
+    ["testLat", "testLng"].forEach((id) => {
+        document.getElementById(id).value = "";
     });
 
     document.getElementById("previewSvgX").textContent = "-";
     document.getElementById("previewSvgY").textContent = "-";
+    document.getElementById("previewGpsAccuracy").textContent = "-";
+    updateCompleteness();
 }
 
-function gpsToSvgPoint(latitude, longitude, calibration) {
-    if (!calibration.configured) return null;
+function solveLinearSystem(matrix, vector) {
+    const size = vector.length;
+    const augmented = matrix.map((row, index) => [...row, vector[index]]);
 
-    const lngRange = calibration.bottomRight.lng - calibration.topLeft.lng;
-    const latRange = calibration.topLeft.lat - calibration.bottomRight.lat;
+    for (let column = 0; column < size; column += 1) {
+        let pivotRow = column;
 
-    if (!lngRange || !latRange) return null;
+        for (let row = column + 1; row < size; row += 1) {
+            if (Math.abs(augmented[row][column]) > Math.abs(augmented[pivotRow][column])) {
+                pivotRow = row;
+            }
+        }
+
+        if (Math.abs(augmented[pivotRow][column]) < 1e-12) return null;
+
+        [augmented[column], augmented[pivotRow]] = [augmented[pivotRow], augmented[column]];
+
+        const pivot = augmented[column][column];
+        for (let col = column; col <= size; col += 1) {
+            augmented[column][col] /= pivot;
+        }
+
+        for (let row = 0; row < size; row += 1) {
+            if (row === column) continue;
+            const factor = augmented[row][column];
+
+            for (let col = column; col <= size; col += 1) {
+                augmented[row][col] -= factor * augmented[column][col];
+            }
+        }
+    }
+
+    return augmented.map((row) => row[size]);
+}
+
+function computeHomography(anchors) {
+    const points = ANCHORS.map((key) => anchors[key]);
+    const matrix = [];
+    const vector = [];
+
+    points.forEach((point) => {
+        const sourceX = point.lng;
+        const sourceY = point.lat;
+        const targetX = point.x;
+        const targetY = point.y;
+
+        matrix.push([sourceX, sourceY, 1, 0, 0, 0, -targetX * sourceX, -targetX * sourceY]);
+        vector.push(targetX);
+
+        matrix.push([0, 0, 0, sourceX, sourceY, 1, -targetY * sourceX, -targetY * sourceY]);
+        vector.push(targetY);
+    });
+
+    const solution = solveLinearSystem(matrix, vector);
+    if (!solution) return null;
+
+    return [
+        [solution[0], solution[1], solution[2]],
+        [solution[3], solution[4], solution[5]],
+        [solution[6], solution[7], 1],
+    ];
+}
+
+function transformGpsToSvg(latitude, longitude, anchors) {
+    if (configuredAnchorCount(anchors) !== 4) return null;
+
+    const homography = computeHomography(anchors);
+    if (!homography) return null;
+
+    const denominator =
+        homography[2][0] * longitude +
+        homography[2][1] * latitude +
+        homography[2][2];
+
+    if (Math.abs(denominator) < 1e-12) return null;
 
     return {
         x:
-            calibration.topLeft.x +
-            ((longitude - calibration.topLeft.lng) / lngRange) *
-                (calibration.bottomRight.x - calibration.topLeft.x),
+            (homography[0][0] * longitude +
+                homography[0][1] * latitude +
+                homography[0][2]) /
+            denominator,
         y:
-            calibration.topLeft.y +
-            ((calibration.topLeft.lat - latitude) / latRange) *
-                (calibration.bottomRight.y - calibration.topLeft.y),
+            (homography[1][0] * longitude +
+                homography[1][1] * latitude +
+                homography[1][2]) /
+            denominator,
     };
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
     let lastClickedPoint = null;
+    let lastGpsPosition = null;
+    let anchorLayer = null;
+    let guidePolygon = null;
 
     const cemeteryMap = createCemeteryLeafletMap({
         autoStartGps: false,
@@ -122,33 +214,101 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error(error);
     }
 
-    if (!readFormCalibration().configured) {
-        showMessage(
-            "calibrationWarning",
-            "Calibration is incomplete. Click the map to fill SVG points, then enter real GPS latitude and longitude."
-        );
+    function renderAnchorOverlay() {
+        const anchors = readAnchors();
+        const completeAnchors = ANCHORS
+            .map((key) => ({ key, ...anchors[key] }))
+            .filter(anchorIsComplete);
+
+        if (!anchorLayer) {
+            anchorLayer = L.layerGroup().addTo(cemeteryMap.map);
+        }
+
+        anchorLayer.clearLayers();
+
+        completeAnchors.forEach((anchor) => {
+            const latLng = L.latLng(anchor.y, anchor.x);
+            L.circleMarker(latLng, {
+                radius: 8,
+                color: "#ffffff",
+                weight: 2,
+                fillColor: "#7c3aed",
+                fillOpacity: 1,
+            })
+                .bindTooltip(`Anchor ${anchorLabel(anchor.key)}`, {
+                    permanent: true,
+                    direction: "top",
+                    className: "anchor-tooltip",
+                })
+                .addTo(anchorLayer);
+        });
+
+        if (guidePolygon) {
+            cemeteryMap.map.removeLayer(guidePolygon);
+            guidePolygon = null;
+        }
+
+        if (completeAnchors.length >= 3) {
+            guidePolygon = L.polygon(
+                completeAnchors.map((anchor) => [anchor.y, anchor.x]),
+                {
+                    color: "#7c3aed",
+                    weight: 2,
+                    fillColor: "#7c3aed",
+                    fillOpacity: 0.08,
+                    dashArray: "6 6",
+                }
+            ).addTo(cemeteryMap.map);
+        }
     }
 
-    document.getElementById("useTopLeftPoint").addEventListener("click", () => {
-        if (!lastClickedPoint) {
-            showMessage("calibrationWarning", "Click a point on the map first.");
-            return;
-        }
+    function refreshCalibrationState() {
+        const state = updateCompleteness();
+        renderAnchorOverlay();
 
-        setValue("topLeftSvgX", lastClickedPoint.x);
-        setValue("topLeftSvgY", lastClickedPoint.y);
-        hideMessage("calibrationSuccess");
+        if (state.count < 4) {
+            showMessage(
+                "calibrationWarning",
+                `${state.count}/4 anchors configured. Capture GPS, click the matching SVG landmark, then assign it to Anchor A-D.`
+            );
+        } else {
+            hideMessage("calibrationWarning");
+        }
+    }
+
+    refreshCalibrationState();
+
+    cemeteryMap.onGpsSuccess = (position) => {
+        lastGpsPosition = position;
+        document.getElementById("capturedGpsSummary").textContent =
+            `${position.coords.latitude.toFixed(8)}, ${position.coords.longitude.toFixed(8)} (${Math.round(position.coords.accuracy)}m)`;
+    };
+
+    document.querySelectorAll(".anchor-assign-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+            const anchor = button.dataset.anchor;
+
+            if (!lastClickedPoint) {
+                showMessage("calibrationWarning", "Click the matching point on the SVG map first.");
+                return;
+            }
+
+            if (!lastGpsPosition) {
+                showMessage("calibrationWarning", "Click Locate Me first to capture the real GPS point.");
+                return;
+            }
+
+            setAnchorValue(anchor, "lat", lastGpsPosition.coords.latitude, 8);
+            setAnchorValue(anchor, "lng", lastGpsPosition.coords.longitude, 8);
+            setAnchorValue(anchor, "x", lastClickedPoint.x, 2);
+            setAnchorValue(anchor, "y", lastClickedPoint.y, 2);
+            hideMessage("calibrationSuccess");
+            refreshCalibrationState();
+        });
     });
 
-    document.getElementById("useBottomRightPoint").addEventListener("click", () => {
-        if (!lastClickedPoint) {
-            showMessage("calibrationWarning", "Click a point on the map first.");
-            return;
-        }
-
-        setValue("bottomRightSvgX", lastClickedPoint.x);
-        setValue("bottomRightSvgY", lastClickedPoint.y);
-        hideMessage("calibrationSuccess");
+    document.querySelectorAll("#calibrationForm input").forEach((input) => {
+        input.addEventListener("input", refreshCalibrationState);
     });
 
     document.getElementById("calibrationForm").addEventListener("submit", async (event) => {
@@ -156,10 +316,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         hideMessage("calibrationWarning");
         hideMessage("calibrationSuccess");
 
-        const calibration = readFormCalibration();
+        const state = updateCompleteness();
 
-        if (!calibration.configured) {
-            showMessage("calibrationWarning", "All calibration fields are required.");
+        if (state.count !== 4) {
+            showMessage("calibrationWarning", "All four anchors are required before saving.");
             return;
         }
 
@@ -187,6 +347,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             showMessage("calibrationSuccess", data.message);
+            refreshCalibrationState();
         } catch (error) {
             console.error(error);
             showMessage("calibrationWarning", "Network error while saving calibration.");
@@ -222,26 +383,36 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             clearCalibrationForm();
+            renderAnchorOverlay();
             showMessage("calibrationSuccess", data.message);
-            showMessage(
-                "calibrationWarning",
-                "Calibration is incomplete. Click the map to fill SVG points, then enter real GPS latitude and longitude."
-            );
+            refreshCalibrationState();
         } catch (error) {
             console.error(error);
             showMessage("calibrationWarning", "Network error while resetting calibration.");
         }
     });
 
+    document.getElementById("useLastGpsForPreview").addEventListener("click", () => {
+        if (!lastGpsPosition) {
+            showMessage("calibrationWarning", "Click Locate Me first to capture GPS.");
+            return;
+        }
+
+        document.getElementById("testLat").value = lastGpsPosition.coords.latitude.toFixed(8);
+        document.getElementById("testLng").value = lastGpsPosition.coords.longitude.toFixed(8);
+        document.getElementById("previewGpsAccuracy").textContent =
+            `${Math.round(lastGpsPosition.coords.accuracy)} meters`;
+    });
+
     document.getElementById("previewGpsPoint").addEventListener("click", () => {
         hideMessage("calibrationWarning");
 
-        const calibration = readFormCalibration();
-        const latitude = getNumber("testLat");
-        const longitude = getNumber("testLng");
+        const anchors = readAnchors();
+        const latitude = getNumberById("testLat");
+        const longitude = getNumberById("testLng");
 
-        if (!calibration.configured) {
-            showMessage("calibrationWarning", "Save or complete both calibration anchors before previewing.");
+        if (configuredAnchorCount(anchors) !== 4) {
+            showMessage("calibrationWarning", "Complete all four anchors before previewing.");
             return;
         }
 
@@ -250,10 +421,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        const point = gpsToSvgPoint(latitude, longitude, calibration);
+        const point = transformGpsToSvg(latitude, longitude, anchors);
 
         if (!point) {
-            showMessage("calibrationWarning", "Unable to convert GPS point. Check anchor values.");
+            showMessage("calibrationWarning", "Unable to transform GPS point. Check anchor shape and values.");
             return;
         }
 
