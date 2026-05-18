@@ -1,0 +1,195 @@
+
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .public-header {
+            background: linear-gradient(to right, #2d5f2e 0%, #3a7d3c 100%);
+            border-bottom: 3px solid #1e4620;
+            padding: 8px 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .public-header h1 {
+            margin: 0;
+            color: #ffffff;
+            font-size: 1.3rem;
+            font-weight: 600;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        #searchInput {
+            padding: 8px 35px 8px 12px;
+            border-radius: 8px;
+            border: 2px solid #c8e6c9;
+            font-size: 0.9rem;
+            width: 200px;
+        }
+
+        #searchBtn {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #2d5f2e;
+            font-size: 1.2rem;
+            padding: 5px;
+        }
+
+        .public-header .admin-link {
+            text-decoration: none;
+            background-color: #c8e6c9;
+            padding: 8px 16px;
+            border-radius: 8px;
+            color: #1e4620;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            white-space: nowrap;
+        }
+
+        .public-header .admin-link:hover {
+            background-color: #a5d6a7;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+        }
+
+        .map-container {
+            flex: 1;
+            height: calc(100vh - 60px);
+            position: relative;
+        }
+
+        /* Mobile-specific styles */
+        @media (max-width: 768px) {
+            .public-header {
+                padding: 10px;
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .public-header h1 {
+                font-size: 1.1rem;
+                text-align: center;
+            }
+
+            .header-controls {
+                flex-direction: column;
+                width: 100%;
+                gap: 8px;
+            }
+
+            .search-container {
+                width: 100%;
+            }
+
+            #searchInput {
+                width: 100%;
+                font-size: 16px;
+                /* Prevents zoom on iOS */
+            }
+
+            .public-header .admin-link {
+                width: 100%;
+                text-align: center;
+                padding: 10px 16px;
+            }
+
+            .map-container {
+                height: calc(100vh - 140px);
+            }
+
+            /* Make zoom controls larger on mobile */
+            .zoom-controls {
+                right: 10px;
+                top: 10px;
+            }
+
+            .zoom-btn {
+                width: 44px !important;
+                height: 44px !important;
+                font-size: 1.2rem !important;
+            }
+
+            .zoom-level {
+                padding: 8px 12px !important;
+                font-size: 0.9rem !important;
+            }
+
+            /* Make modals full height on mobile */
+            .modal-dialog {
+                margin: 0;
+                max-width: 100%;
+                height: 100vh;
+            }
+
+            .modal-content {
+                height: 100%;
+                border-radius: 0;
+            }
+
+            .modal-body {
+                overflow-y: auto;
+            }
+
+            /* Larger touch targets for search results */
+            .search-result-item {
+                padding: 15px !important;
+                font-size: 1rem !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .public-header h1 {
+                font-size: 1rem;
+            }
+
+            #searchInput {
+                font-size: 16px;
+                /* Prevents zoom on iOS */
+                padding: 10px 40px 10px 12px;
+            }
+
+            #searchBtn {
+                font-size: 1.4rem;
+            }
+        }
+
+        /* Improve touch scrolling */
+        .map-scroll {
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-x pan-y;
+        }
+
+        /* Prevent text selection during drag */
+        .map-scroll * {
+            user-select: none;
+            -webkit-user-select: none;
+        }

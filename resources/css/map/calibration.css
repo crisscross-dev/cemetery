@@ -1,0 +1,358 @@
+* {
+    box-sizing: border-box;
+}
+
+html,
+body.calibration-body-root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #eef5ee;
+    color: #1f2d1f;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.calibration-shell {
+    width: 100vw;
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: 50px minmax(0, 1fr);
+    overflow: hidden;
+}
+
+.calibration-header {
+    display: grid;
+    place-items: center;
+    position: relative;
+    height: 50px;
+    background: linear-gradient(to right, #2d5f2e 0%, #3a7d3c 100%);
+    border-bottom: 3px solid #1e4620;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.calibration-header h1 {
+    margin: 0;
+    color: #fff;
+    font-size: 1.45rem;
+    font-weight: 700;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.calibration-menu-button {
+    display: none;
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    background: transparent;
+    padding: 5px;
+    cursor: pointer;
+}
+
+.calibration-menu-button span {
+    display: block;
+    width: 25px;
+    height: 3px;
+    margin: 5px 0;
+    border-radius: 2px;
+    background: #fff;
+}
+
+.calibration-body {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr) 360px;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.calibration-sidebar {
+    min-width: 0;
+    overflow: hidden;
+    background: #c8e6c9;
+    border-right: 2px solid #a5d6a7;
+}
+
+.calibration-sidebar .sidebar {
+    height: calc(100dvh - 50px);
+}
+
+.calibration-main {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: #eef5ee;
+}
+
+.calibration-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 230px;
+    align-items: center;
+    gap: 12px;
+    min-height: 82px;
+    padding: 10px 12px;
+    background: #fff;
+    border-bottom: 1px solid #c7d7c7;
+}
+
+.calibration-point-readout {
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.calibration-point-readout strong {
+    display: block;
+    margin-bottom: 2px;
+}
+
+.calibration-point-readout span {
+    display: inline-block;
+    margin-right: 14px;
+}
+
+.calibration-actions {
+    display: grid;
+    gap: 8px;
+}
+
+.calibration-actions button,
+.calibration-save-btn,
+.calibration-reset-btn,
+#previewGpsPoint {
+    width: 100%;
+    border: 0;
+    border-radius: 6px;
+    background: #2d5f2e;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    padding: 9px 10px;
+    cursor: pointer;
+}
+
+.calibration-actions button:hover,
+.calibration-save-btn:hover,
+.calibration-reset-btn:hover,
+#previewGpsPoint:hover {
+    background: #1e4620;
+}
+
+.calibration-form-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.calibration-reset-btn {
+    background: #b3261e;
+}
+
+.calibration-reset-btn:hover {
+    background: #8f1d18;
+}
+
+.calibration-map-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: #f5f8f5;
+}
+
+.calibration-map-container .cemetery-leaflet-map,
+.calibration-map-container .leaflet-container {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.calibration-map-container #gpsWarning {
+    display: none;
+}
+
+#houseGraveSVG {
+    display: block;
+    background: #fff;
+}
+
+.leaflet-container svg .grave-box[data-status],
+#graveHouses .grave-box[data-status] {
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+#graveHouses .grave-box[data-status="vacant"],
+#graveHouses .grave-box[data-status="available"] {
+    fill: #90ee90;
+    fill-opacity: 0.4;
+}
+
+#graveHouses .grave-box[data-status="occupied"] {
+    fill: #ff6b6b;
+    fill-opacity: 0.6;
+    stroke: #d32f2f;
+}
+
+#graveHouses .grave-box[data-status="reserved"] {
+    fill: #ffd700;
+    fill-opacity: 0.5;
+    stroke: #f57c00;
+}
+
+.calibration-panel {
+    width: 360px;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px;
+    background: #fff;
+    border-left: 1px solid #c7d7c7;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
+}
+
+.calibration-section {
+    display: grid;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid #e0e8e0;
+}
+
+.calibration-section h2 {
+    margin: 0;
+    color: #1e4620;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.calibration-section label {
+    display: grid;
+    gap: 5px;
+    color: #334233;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.calibration-section input {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border: 1px solid #b7c7b7;
+    border-radius: 6px;
+    padding: 9px 10px;
+    background: #fff;
+    color: #1f2d1f;
+    font-size: 16px;
+}
+
+.calibration-warning,
+.calibration-success {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.calibration-warning {
+    border: 1px solid #ffec99;
+    background: #fff3cd;
+    color: #664d03;
+}
+
+.calibration-success {
+    border: 1px solid #badbcc;
+    background: #d1e7dd;
+    color: #0f5132;
+}
+
+.calibration-preview-output {
+    margin: 0;
+    color: #334233;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
+    .calibration-body {
+        grid-template-columns: 250px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .calibration-main {
+        grid-column: 2;
+    }
+
+    .calibration-panel {
+        grid-column: 2;
+        width: 100%;
+        max-height: 42dvh;
+        border-left: 0;
+        border-top: 1px solid #c7d7c7;
+    }
+}
+
+@media (max-width: 768px) {
+    body.calibration-body-root {
+        overflow: auto;
+    }
+
+    .calibration-shell {
+        min-height: 100dvh;
+        height: auto;
+    }
+
+    .calibration-menu-button {
+        display: block;
+    }
+
+    .calibration-header h1 {
+        font-size: 1.1rem;
+    }
+
+    .calibration-body {
+        display: block;
+        overflow: visible;
+    }
+
+    .calibration-sidebar {
+        position: fixed;
+        top: 50px;
+        left: 0;
+        z-index: 1100;
+        width: 250px;
+        height: calc(100dvh - 50px);
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .calibration-sidebar.active {
+        transform: translateX(0);
+    }
+
+    .calibration-main {
+        height: 65dvh;
+    }
+
+    .calibration-toolbar {
+        grid-template-columns: 1fr;
+        min-height: 0;
+    }
+
+    .calibration-panel {
+        width: 100%;
+        max-height: none;
+        border-left: 0;
+        border-top: 1px solid #c7d7c7;
+    }
+}
